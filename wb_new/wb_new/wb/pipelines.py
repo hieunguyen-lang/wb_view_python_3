@@ -5,19 +5,30 @@
 # Don't forget to add your pipeline to the ITEM_PIPELINES setting
 # See: http://doc.scrapy.org/en/latest/topics/item-pipeline.html
 import configparser
-from scrapy import settings
-import MySQLdb
+
+import mysql.connector
 from elasticsearch import Elasticsearch
 import hashlib
 import json
 from datetime import datetime 
-from wb_new.wb.spiders.base_spider import BaseSpider
+from .spiders.base_spider import BaseSpider
 import urllib.request
 import requests
 import pika
 import redis
-class BloomFilterPipeline(object):
-    def __init__(self):
+
+class BasePipeline:
+    def __init__(self, settings):
+        self.settings = settings
+
+    @classmethod
+    def from_crawler(cls, crawler):
+        return cls(settings=crawler.settings)
+    
+class BloomFilterPipeline(BasePipeline):
+       
+    def __init__(self,settings=None):
+        self.settings = settings
         self.filter_host = settings['FILTER_HOST']
         self.filter_port = settings['FILTER_PORT']
         self.filter_url = "http://"+self.filter_host+":"+ str(self.filter_port)
@@ -50,8 +61,9 @@ class BloomFilterPipeline(object):
             return item
 
 
-class WbPipeline(object):
-    def __init__(self):
+class WbPipeline(BasePipeline):
+    def __init__(self,settings=None):
+        self.settings = settings
         config = configparser.ConfigParser()
         config.read(settings.get('EXTRA_CONFIG_FILE'))
         self.extra_config = config
@@ -62,12 +74,17 @@ class WbPipeline(object):
         }
         # c = Connection(host=settings['HBASE_MASTER'],port=settings['HBASE_PORT'])
         # self.table = c.table(settings['HBASE_TABLE'])
-        self.es = Elasticsearch([{'host': settings['ES_HOST'], 'port': settings['ES_PORT']}])
+        self.es = Elasticsearch([{
+                    'host': settings['ES_HOST'],
+                    'port': settings['ES_PORT'],
+                    'scheme': 'http'  # hoặc 'https' nếu dùng SSL
+                }])
+
         # self.batch = self.table.batch(fail_silently=False)
         # self.batch_count = 0
         self.now  = datetime.now()
 
-        self.conn = MySQLdb.connect(user=settings['MYSQL_USERNAME'],
+        self.conn = mysql.connector.connect(user=settings['MYSQL_USERNAME'],
                                     passwd=settings['MYSQL_PASSWD'],
                                     db=settings['MYSQL_DB'],
                                     host=settings['MYSQL_HOST'],
@@ -76,10 +93,12 @@ class WbPipeline(object):
         
 
         credentials = pika.PlainCredentials(username=settings['RABBIT_USERNAME'], password=settings['RABBIT_PASSWORD'])
-        params = pika.ConnectionParameters(settings['RABBIT_HOST'],credentials=credentials)
+        params = pika.ConnectionParameters(settings['RABBIT_HOST'],credentials=credentials,port=settings['RABBIT_PORT'])
         self.connection = pika.BlockingConnection(params)
         self.channel = self.connection.channel()
-        self.channel.queue_declare(queue=settings['RABBIT_QUEUE'])
+        self.channel.queue_declare(queue=settings['RABBIT_QUEUE'],durable=True)
+        self.channel.queue_declare(queue="monitaz_ifollow_tele", durable=True)
+        self.channel.queue_declare(queue="monitaz_ifollow_banking", durable=True)
         self.channel.exchange_declare(exchange='the_famous_fanout', exchange_type='fanout')
         self.channel.queue_bind(exchange='the_famous_fanout', queue="monitaz_ifollow_tele")
         self.channel.queue_bind(exchange='the_famous_fanout', queue="monitaz_ifollow_banking")
@@ -92,10 +111,10 @@ class WbPipeline(object):
 
 
     def mysqConnect(self):
-        self.conn = MySQLdb.connect(user=settings['MYSQL_USERNAME'],
-                                    passwd=settings['MYSQL_PASSWD'],
-                                    db=settings['MYSQL_DB'],
-                                    host=settings['MYSQL_HOST'],
+        self.conn = mysql.connector.connect(user=self.settings['MYSQL_USERNAME'],
+                                    passwd=self.settings['MYSQL_PASSWD'],
+                                    db=self.settings['MYSQL_DB'],
+                                    host=self.settings['MYSQL_HOST'],
                                     charset="utf8", use_unicode=True)
         self.cursor = self.conn.cursor()
 
@@ -105,7 +124,7 @@ class WbPipeline(object):
             cursor = self.conn.cursor()
             cursor.execute(sql, params)
             self.conn.commit()
-        except (AttributeError, MySQLdb.OperationalError) as e:
+        except (AttributeError, mysql.connector.OperationalError) as e:
             print ('exception generated during sql connection: ', e)
             self.mysqConnect()
             cursor = self.conn.cursor()
@@ -215,7 +234,7 @@ class WbPipeline(object):
                     #     self.batch = self.table.batch(fail_silently=False)
                     item_dict = dict(item)
                     # self.table.insert(key_insert, {"ifollow": item_dict})
-                    res = self.es.index(index=settings['ES_INDEX'], doc_type=settings['ES_TYPE'], id=key_insert, body=item_dict)
+                    res = self.es.index(index=self.settings['ES_INDEX'], doc_type=self.settings['ES_TYPE'], id=key_insert, body=item_dict)
                     # self._set_raw(key_insert, item)
 
                     item_dict['web_key'] = key_insert

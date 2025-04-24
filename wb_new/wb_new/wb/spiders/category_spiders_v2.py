@@ -28,17 +28,17 @@ from scrapy import settings
 from scrapy.http import Request
 import scrapy
 import time
-from helper import Helper
-from dispatcherLib import DispatcherLibrary
+from .helper import Helper
+from .dispatcherLib import DispatcherLibrary
 from scrapy import signals
 from pydispatch import dispatcher
-import MySQLdb
+import mysql.connector
 import logging
 from .base_spider import BaseSpider
 import re
 from datetime import datetime
 from scrapy.http import HtmlResponse
-import cfscrape
+
 from scrapy.http import FormRequest
 import json
 from lxml import etree

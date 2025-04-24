@@ -2,9 +2,9 @@ import os
 import random
 
 from scrapy import settings
-from proxy import *
-from proxy_https import *
-from proxy_https_v2 import *
+from .proxy import *
+from .proxy_https import *
+from .proxy_https_v2 import *
 #from scrapy import log
 
 class RandomUserAgentMiddleware(object):

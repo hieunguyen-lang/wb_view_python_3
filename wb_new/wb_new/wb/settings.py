@@ -102,14 +102,14 @@ PARSER_CONFIG_URL_FILE = './parse_url_config.cfg'
 EXTRA_CONFIG_FILE = './extra_config.cfg'
 
 MYSQL_HOST = 'localhost'
-MYSQL_USERNAME = 'root'
-MYSQL_PASSWD = ''
-MYSQL_DB = 'monitaz_core'
-MYSQL_MONITAZ_DB = "monitaz_db"
+MYSQL_USERNAME = 'hieunk'
+MYSQL_PASSWD = '123456'
+MYSQL_DB = 'crawl_data_express'
+MYSQL_MONITAZ_DB = "crawl_data_express"
 
 
-MYSQL_TOFILTER_DB = "monitaz_tofilter_ifollow"
-MYSQL_FILTER_MEDIA_DB = "monitaz_filter_media"
+MYSQL_TOFILTER_DB = "crawl_data_express"
+MYSQL_FILTER_MEDIA_DB = "crawl_data_express"
 
 
 HBASE_MASTER = '192.168.1.221'
@@ -126,9 +126,10 @@ REDIS_PORT = 6379
 REDIS_DB_ID = 3
 
 RABBIT_QUEUE = 'monitaz_ifollow_items'
-RABBIT_HOST = "192.168.1.234"
-RABBIT_USERNAME = "monitaz"
-RABBIT_PASSWORD = "monitaz2016" 
+RABBIT_HOST = "localhost"
+RABBIT_USERNAME = "admin"
+RABBIT_PASSWORD = "admin" 
+RABBIT_PORT = 5672
 
 ES_HOST='192.168.1.230'
 ES_INDEX='ifollow'

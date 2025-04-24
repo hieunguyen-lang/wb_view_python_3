@@ -7,9 +7,9 @@ from datetime import datetime
 from datetime import timedelta
 import dateutil.parser
 import time
-import MySQLdb
+import mysql.connector
 import os
-from helper import Helper
+from .helper import Helper
 class DispatcherLibrary:
     def __init__(self, service_id=None,group=None, *args, **kwargs):
         extra_config = configparser.ConfigParser()
@@ -23,7 +23,7 @@ class DispatcherLibrary:
         self.DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
 
     def mysqConnect(self):
-        self.conn = MySQLdb.connect(user=self.extra_config.get('mysql','db_username'),
+        self.conn = mysql.connector.connect(user=self.extra_config.get('mysql','db_username'),
                                     passwd=self.extra_config.get('mysql','db_password'),
                                     db=self.extra_config.get('mysql','db_name'),
                                     host=self.extra_config.get('mysql','db_host'),
@@ -37,7 +37,7 @@ class DispatcherLibrary:
             cursor = self.conn.cursor()
             cursor.execute(sql, params)
             self.conn.commit()
-        except (AttributeError, MySQLdb.OperationalError) as e:
+        except (AttributeError, mysql.connector.OperationalError) as e:
             print ('exception generated during sql connection: ', e)
             self.mysqConnect()
             cursor = self.conn.cursor()
@@ -46,10 +46,12 @@ class DispatcherLibrary:
 
     def spider_open(self):
         # print self.service_id
+        print("test")
         if (self.service_id != None):
             current_time = time.time()
             sql1 = """SELECT id, process_id FROM crawl_manager_service_job WHERE service_id = %s AND status = 0 AND group_page = %s AND server_version = %s ORDER BY id DESC LIMIT 1"""
             process_info = self.mysqlQuery(sql1,(self.service_id, self.group_page, Helper().getServerVersion()))
+            print(process_info)
             list_data = process_info.fetchone()
             if(list_data):
                 sql = """DELETE FROM crawl_manager_service_job WHERE id = %s"""
@@ -87,8 +89,10 @@ class DispatcherLibrary:
             return []
 
     def getCateUrls(self, domain):
-        sql = """SELECT id, domain_url, category_name, domain_name, domain_group, status, created, pay_category FROM web_url WHERE domain_name = '%s' AND  status = 1 AND domain_group != 'HGR1' ORDER BY RAND()"""
+        print(domain)
+        sql = """SELECT id, domain_url, category_name, domain_name, domain_group, status, created, pay_category FROM web_url WHERE domain_name = '%s' AND  status = active AND domain_group != 'HGR1' ORDER BY RAND()"""
         curr = self.mysqlQuery(sql % domain)
+        print(curr.fetchall())
         if curr :
             return curr.fetchall()
         else:

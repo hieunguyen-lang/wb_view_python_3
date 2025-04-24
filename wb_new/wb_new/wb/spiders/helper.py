@@ -33,7 +33,7 @@ import calendar
 import unidecode
 import re
 import json
-from wb_new.wb.items import WbItem
+from wb.items import WbItem
 # import sys
 # reload(sys)
 # sys.setdefaultencoding('utf8')

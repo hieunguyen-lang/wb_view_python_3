@@ -3,15 +3,15 @@
 __author__ = 'VuongNM'
 
 import configparser
-from scrapy import settings
+# from scrapy import settings
 from scrapy.http import Request
 import scrapy
 import time
-from helper import Helper
-from dispatcherLib import DispatcherLibrary
+from .helper import Helper
+from .dispatcherLib import DispatcherLibrary
 from scrapy import signals
 from pydispatch import dispatcher
-import MySQLdb
+import mysql.connector
 import logging
 from datetime import datetime 
 import re
@@ -24,6 +24,7 @@ from scrapy.selector import Selector
 # from urlparse import urlparse
 from urllib.parse import urlparse
 import urllib
+from PIL import Image
 import requests
 
 class BaseSpider(scrapy.Spider):
@@ -50,8 +51,15 @@ class BaseSpider(scrapy.Spider):
     custom_settings = {
         "CLOSESPIDER_TIMEOUT": 120,
     }
-
-    def __init__(self, service_id=None,group=None, url= None, cate = None, debug=None, debug_scrape=None, debug_filtered=None, debug_again=None, *args, **kwargs):
+    @classmethod
+    def from_crawler(cls, crawler, *args, **kwargs):
+        spider = cls(settings=crawler.settings, *args, **kwargs)
+        spider._set_crawler(crawler)
+        return spider
+        
+    
+    def __init__(self,settings=None, service_id=None,group=None, url= None, cate = None, debug=None, debug_scrape=None, debug_filtered=None, debug_again=None, *args, **kwargs):
+        self.settings = settings
         extra_config = configparser.ConfigParser()
         extra_config.read(settings.get('EXTRA_CONFIG_FILE'))
         self.extra_config = extra_config
@@ -75,32 +83,36 @@ class BaseSpider(scrapy.Spider):
 
         logging.info( '[INFO] Init connection mysql' )
         print ('[INFO] Init connection mysql')
-        self.monitaz_conn = MySQLdb.connect(user=settings['MYSQL_USERNAME'],
-                                    passwd=settings['MYSQL_PASSWD'],
-                                    db=settings['MYSQL_MONITAZ_DB'],
+        self.monitaz_conn = mysql.connector.connect(user=settings['MYSQL_USERNAME'],
+                                    password=settings['MYSQL_PASSWD'],
+                                    database=settings['MYSQL_MONITAZ_DB'],
                                     host=settings['MYSQL_HOST'],
-                                    charset="utf8", use_unicode=True)
+                                    charset="utf8", 
+                                    use_unicode=True)
         self.monitaz_cursor= self.monitaz_conn.cursor()
 
-        self.core_conn = MySQLdb.connect(user=settings['MYSQL_USERNAME'],
-                                    passwd=settings['MYSQL_PASSWD'],
-                                    db=settings['MYSQL_DB'],
+        self.core_conn = mysql.connector.connect(user=settings['MYSQL_USERNAME'],
+                                    password=settings['MYSQL_PASSWD'],
+                                    database=settings['MYSQL_DB'],
                                     host=settings['MYSQL_HOST'],
-                                    charset="utf8", use_unicode=True)
+                                    charset="utf8", 
+                                    use_unicode=True)
         self.core_cursor= self.core_conn.cursor()
 
-        self.filterdb_conn = MySQLdb.connect(user=settings['MYSQL_USERNAME'],
-                                    passwd=settings['MYSQL_PASSWD'],
-                                    db=settings['MYSQL_TOFILTER_DB'],
+        self.filterdb_conn = mysql.connector.connect(user=settings['MYSQL_USERNAME'],
+                                    password=settings['MYSQL_PASSWD'],
+                                    database=settings['MYSQL_TOFILTER_DB'],
                                     host=settings['MYSQL_HOST'],
-                                    charset="utf8", use_unicode=True)
+                                    charset="utf8", 
+                                    use_unicode=True)
         self.filter_cursor = self.filterdb_conn.cursor()
 
-        self.mediadb_conn = MySQLdb.connect(user=settings['MYSQL_USERNAME'],
-                                    passwd=settings['MYSQL_PASSWD'],
-                                    db=settings['MYSQL_FILTER_MEDIA_DB'],
+        self.mediadb_conn = mysql.connector.connect(user=settings['MYSQL_USERNAME'],
+                                    password=settings['MYSQL_PASSWD'],
+                                    database=settings['MYSQL_FILTER_MEDIA_DB'],
                                     host=settings['MYSQL_HOST'],
-                                    charset="utf8", use_unicode=True)
+                                    charset="utf8", 
+                                    use_unicode=True)
         self.mediadb_cursor = self.mediadb_conn.cursor()
 
         self.init_filterdb()
@@ -122,18 +134,22 @@ class BaseSpider(scrapy.Spider):
 
         page = 1
         cf_domain = self.allowed_domains[0]
+        
         parser_xpath = self.get_xpaths()
+        
         # parser_xpath = self.get_xpaths_mysql()
         # if parser_xpath:
         #     print "[INFO] GET XPATH IN DB"
         # else:
         #     print "[INFO] GET XPATH IN FILE CFG"
         #     parser_xpath = self.get_xpaths()
-
+        
         if parser_xpath:
+            print("[INFO] GET XPATH IN DB SUCCESS")
             if self.crawl_one_url == None and self.crawl_one_cate == None :
-
+                print(cf_domain)
                 list_data = DispatcherLibrary(self.service_id, self.group).getCateUrls(cf_domain)
+                print("[INFO] GET URL FROM DB",list_data)
                 if len(list_data) > 0:
                     i = 1
                     for row in list_data:
@@ -515,14 +531,14 @@ class BaseSpider(scrapy.Spider):
             "post_content_image": self.parse_cfg.get(cf_domain, 'post_content_image_select'),
             "post_category_name": self.parse_cfg.get(cf_domain, 'post_category_name')
         }
-
+        
         ret = {}
-        for key, value in xpaths.iteritems():
+        for key, value in xpaths.items():
             if ( value == "" or value == None):
                 ret[key] = "./just-a-nonsense-xpath"
             else:
                 ret[key] = value
-
+        
         return ret
 
     def get_xpaths_mysql(self):
@@ -570,7 +586,7 @@ class BaseSpider(scrapy.Spider):
                 return ret 
             # print row
             # print "================"      
-        except (AttributeError, MySQLdb.OperationalError) as e:
+        except (AttributeError, mysql.connector.OperationalError) as e:
             print ('[Info] Exception generated during sql connection: ', e)
             return ret 
 
@@ -596,8 +612,8 @@ class BaseSpider(scrapy.Spider):
         for row in self.to_update_urls:
             string = row + "_" + self.allowed_domains[0]
 
-            if type(string) is unicode:
-                string = string.encode("utf8")
+            # if type(string) is unicode:
+            #     string = string.encode("utf8")
             web_key = hashlib.md5(string).hexdigest()
             if row in self.visited_urls:
                 old_datetime = self.visited_datetimes[self.visited_urls.index(row)]
@@ -686,7 +702,7 @@ class BaseSpider(scrapy.Spider):
         return domain_name
 
     def update_seen_urls_to_file(self):
-        urls_log_dir = settings['LOG_URLS_FILE']
+        urls_log_dir = self.settings['LOG_URLS_FILE']
         for i in self.seen_urls:
             cate_id = i[0]
             cate_name =i[1]
